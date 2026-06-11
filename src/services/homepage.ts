@@ -16,15 +16,15 @@ type ReviewWithRelations = Prisma.ReviewGetPayload<{
 }>;
 
 interface HomepageData {
-  heroBanners: Prisma.HeroBannerGetPayload<{}>[];
+  heroBanners: Prisma.HeroBannerGetPayload<Record<string, never>>[];
   featuredProducts: ProductWithRelations[];
   trendingProducts: ProductWithRelations[];
   newArrivals: ProductWithRelations[];
   bestSellers: ProductWithRelations[];
-  categories: Prisma.CategoryGetPayload<{}>[];
-  brands: Prisma.BrandGetPayload<{}>[];
+  categories: Prisma.CategoryGetPayload<Record<string, never>>[];
+  brands: Prisma.BrandGetPayload<Record<string, never>>[];
   reviews: ReviewWithRelations[];
-  homepageSettings: Prisma.HomepageSettingGetPayload<{}>[];
+  homepageSettings: Prisma.HomepageSettingGetPayload<Record<string, never>>[];
 }
 
 const emptyHomepageData: HomepageData = {
