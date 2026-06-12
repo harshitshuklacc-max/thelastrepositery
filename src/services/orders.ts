@@ -88,8 +88,9 @@ export async function createPosSale(data: PosSaleInput, adminId: string) {
 
     const invoiceNumber = generateInvoiceNumber();
     const retentionDays = storeSettings.invoiceRetentionDays;
+    const invoiceDate = new Date();
 
-    await tx.invoice.create({
+    const invoice = await tx.invoice.create({
       data: {
         invoiceNumber,
         orderId: order.id,
@@ -104,8 +105,8 @@ export async function createPosSale(data: PosSaleInput, adminId: string) {
         tax: totalTax,
         grandTotal,
         paymentMethod: data.paymentMethod,
-        invoiceDate: new Date(),
-        expiresAt: addDays(new Date(), retentionDays),
+        invoiceDate,
+        expiresAt: addDays(invoiceDate, retentionDays),
         items: {
           create: orderItems.map((item) => ({
             productId: item.productId,
@@ -120,6 +121,7 @@ export async function createPosSale(data: PosSaleInput, adminId: string) {
           })),
         },
       },
+      include: { items: true },
     });
 
     await tx.auditLog.create({
@@ -132,7 +134,33 @@ export async function createPosSale(data: PosSaleInput, adminId: string) {
       },
     });
 
-    return order;
+    return {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      invoiceDate: invoice.invoiceDate.toISOString(),
+      storeName: invoice.storeName,
+      storeAddress: invoice.storeAddress,
+      storePhone: invoice.storePhone,
+      customerName: invoice.customerName,
+      customerPhone: invoice.customerPhone,
+      paymentMethod: invoice.paymentMethod,
+      subtotal: subtotal,
+      discount: orderDiscount,
+      tax: totalTax,
+      grandTotal: grandTotal,
+      items: invoice.items.map((item) => ({
+        name: item.name,
+        sku: item.sku,
+        barcode: item.barcode,
+        quantity: item.quantity,
+        price: item.price.toNumber(),
+        discount: item.discount.toNumber(),
+        tax: item.tax.toNumber(),
+        total: item.total.toNumber(),
+      })),
+    };
   });
 }
 

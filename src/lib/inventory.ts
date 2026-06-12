@@ -52,6 +52,52 @@ export async function updateStock(
   return updated;
 }
 
+export async function setStock(
+  params: {
+    productId: string;
+    quantity: number;
+    changeType: InventoryChangeType;
+    adminId?: string;
+    reference?: string;
+    notes?: string;
+  },
+  tx?: Prisma.TransactionClient
+) {
+  const client = tx ?? prisma;
+
+  const inventory = await client.inventory.findUnique({
+    where: { productId: params.productId },
+  });
+
+  if (!inventory) {
+    throw new Error(`Inventory not found for product ${params.productId}`);
+  }
+
+  const quantityBefore = inventory.quantity;
+  const quantityAfter = Math.max(0, params.quantity);
+  const quantityChange = quantityAfter - quantityBefore;
+
+  const updated = await client.inventory.update({
+    where: { productId: params.productId },
+    data: { quantity: quantityAfter },
+  });
+
+  await client.inventoryLog.create({
+    data: {
+      productId: params.productId,
+      adminId: params.adminId,
+      changeType: params.changeType,
+      quantityBefore,
+      quantityAfter,
+      quantityChange,
+      reference: params.reference,
+      notes: params.notes,
+    },
+  });
+
+  return updated;
+}
+
 export async function reserveStock(productId: string, quantity: number) {
   return prisma.$transaction(async (tx) => {
     const inventory = await tx.inventory.findUnique({

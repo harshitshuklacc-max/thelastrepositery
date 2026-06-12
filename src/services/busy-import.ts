@@ -1,15 +1,31 @@
 import prisma from "@/lib/db";
-import { parseBusyPDF, validateBusyProductRow } from "@/lib/busy-parser";
+import { parseBusyPDF, parseBusyCSV, validateBusyProductRow, type BusyParseResult } from "@/lib/busy-parser";
 import { slugify } from "@/lib/utils";
-import { updateStock } from "@/lib/inventory";
+import { setStock } from "@/lib/inventory";
 
 export async function processBusyImport(
   buffer: ArrayBuffer,
   fileName: string,
   adminId: string
 ) {
-  const { rows, errors: parseErrors, skipped, totalLinesScanned } = await parseBusyPDF(buffer);
+  const lowerName = fileName.toLowerCase();
+  let parsed: BusyParseResult;
 
+  if (lowerName.endsWith(".csv")) {
+    const text = new TextDecoder().decode(buffer);
+    parsed = parseBusyCSV(text);
+  } else {
+    parsed = await parseBusyPDF(buffer);
+  }
+
+  return syncBusyRows(parsed, fileName, adminId);
+}
+
+async function syncBusyRows(
+  { rows, errors: parseErrors, skipped, totalLinesScanned }: BusyParseResult,
+  fileName: string,
+  adminId: string
+) {
   let addedCount = 0;
   let updatedCount = 0;
   let failedCount = 0;
@@ -24,7 +40,7 @@ export async function processBusyImport(
         addedCount: 0,
         updatedCount: 0,
         failedCount: 0,
-        errors: errors.length > 0 ? errors : ["No valid products extracted from PDF"],
+        errors: errors.length > 0 ? errors : ["No valid products extracted from file"],
       },
     });
 
@@ -40,33 +56,40 @@ export async function processBusyImport(
     };
   }
 
-  for (const rawRow of rows) {
-    const validation = validateBusyProductRow(rawRow);
-    if (!validation.valid) {
-      skippedCount++;
-      errors.push(`Skipped: ${validation.reason}`);
-      continue;
-    }
+  const validatedRows = rows
+    .map((rawRow) => validateBusyProductRow(rawRow))
+    .filter((result) => {
+      if (!result.valid) {
+        skippedCount++;
+        errors.push(`Skipped: ${result.reason}`);
+        return false;
+      }
+      return true;
+    })
+    .map((result) => result.row);
 
-    const row = validation.row;
+  const barcodeCodes = validatedRows.map((row) => row.barcode);
+  const existingBarcodes = await prisma.barcode.findMany({
+    where: { code: { in: barcodeCodes } },
+    include: { product: { include: { inventory: true } } },
+  });
+  const barcodeMap = new Map(existingBarcodes.map((entry) => [entry.code, entry]));
 
+  for (const row of validatedRows) {
     try {
-      const existingBarcode = await prisma.barcode.findUnique({
-        where: { code: row.barcode },
-        include: { product: { include: { inventory: true } } },
-      });
+      const existingBarcode = barcodeMap.get(row.barcode);
 
       if (existingBarcode?.product) {
-        if (row.quantity > 0) {
-          await updateStock({
-            productId: existingBarcode.product.id,
-            quantityChange: row.quantity,
-            changeType: "BUSY_IMPORT",
-            adminId,
-            reference: fileName,
-            notes: `BUSY import: ${row.name}`,
-          });
-        }
+        const stockQty = row.stock || row.quantity;
+
+        await setStock({
+          productId: existingBarcode.product.id,
+          quantity: stockQty,
+          changeType: "BUSY_IMPORT",
+          adminId,
+          reference: fileName,
+          notes: `BUSY import: ${row.name}`,
+        });
 
         await prisma.product.update({
           where: { id: existingBarcode.product.id },
@@ -102,7 +125,7 @@ export async function processBusyImport(
             purchasePrice: row.sellingPrice * 0.7,
             status: "ACTIVE",
             inventory: {
-              create: { quantity: row.stock || row.quantity },
+              create: { quantity: Math.max(0, row.stock || row.quantity) },
             },
             barcodes: {
               create: { code: row.barcode, type: "CODE128", isPrimary: true },

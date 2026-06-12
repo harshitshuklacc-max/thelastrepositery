@@ -1,41 +1,56 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { BusyImportForm } from "@/components/admin/busy-import-form";
+import prisma from "@/lib/db";
+import { formatDateTime } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminImportPage() {
+  const recentImports = await prisma.busyImportLog.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+
   return (
     <div className="container mx-auto px-4 py-12 text-white">
-      {/* Top Banner Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-12">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="font-display text-4xl font-bold tracking-tight">Bulk Catalog Import</h1>
-          <p className="text-white/60 mt-1">Upload inventory tables, CSV drop lists, and database catalogs.</p>
+          <h1 className="font-display text-4xl font-bold tracking-tight">BUSY Import</h1>
+          <p className="text-white/60 mt-1">
+            Upload BUSY PDF or CSV stock lists to sync real products into your catalog.
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Link href="/admin/barcodes">
-            <Button variant="outline" className="border-white/10 text-white hover:bg-white/5">
-              Barcodes
-            </Button>
-          </Link>
-          <Button className="bg-red-500 hover:bg-red-600 text-white">
-            Upload CSV
+        <Link href="/admin/barcodes">
+          <Button variant="outline" className="border-white/10 text-white hover:bg-white/5">
+            Barcodes
           </Button>
-        </div>
+        </Link>
       </div>
 
-      {/* Upload Interface Container */}
-      <div className="glass-card luxury-border rounded p-8 bg-white/[0.01] text-center max-w-2xl mx-auto border border-dashed border-white/10 py-16">
-        <div className="mx-auto w-12 h-12 rounded bg-white/5 flex items-center justify-center mb-4">
-          <span className="text-red-400 text-xl font-bold">+</span>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          <BusyImportForm />
         </div>
-        <h3 className="text-lg font-bold mb-1">Drag and drop your manifest here</h3>
-        <p className="text-sm text-white/40 max-w-sm mx-auto mb-6">
-          Supports .csv or .json files containing product SKU, mrp data structures, and inventory tallies.
-        </p>
-        <Button variant="outline" className="border-white/10 hover:bg-white/5 text-white px-6">
-          Browse Files
-        </Button>
+
+        <div className="glass-card luxury-border rounded bg-white/[0.01] p-6 h-fit">
+          <h2 className="text-lg font-bold mb-4">Recent Imports</h2>
+          {recentImports.length === 0 ? (
+            <p className="text-white/50 text-sm">No imports yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {recentImports.map((log) => (
+                <div key={log.id} className="border-b border-white/5 pb-4 last:border-0 last:pb-0">
+                  <p className="font-medium text-sm truncate">{log.fileName}</p>
+                  <p className="text-xs text-white/40 mt-1">{formatDateTime(log.createdAt)}</p>
+                  <p className="text-xs text-white/60 mt-2">
+                    Added {log.addedCount} · Updated {log.updatedCount} · Failed {log.failedCount}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

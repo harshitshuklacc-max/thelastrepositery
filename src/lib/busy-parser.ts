@@ -301,22 +301,35 @@ function dedupeRows(rows: BusyProductRow[]): BusyProductRow[] {
 }
 
 export async function parseBusyPDF(buffer: ArrayBuffer): Promise<BusyParseResult> {
-  const pdfjs = await import("pdfjs-dist");
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const { existsSync } = await import("fs");
+  const path = await import("path");
+  const { pathToFileURL } = await import("url");
 
   if (typeof window === "undefined") {
-    const path = await import("path");
-    const { pathToFileURL } = await import("url");
-    const workerPath = path.join(
-      process.cwd(),
-      "node_modules",
-      "pdfjs-dist",
-      "build",
-      "pdf.worker.mjs"
-    );
-    pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
+    const workerCandidates = [
+      path.join(process.cwd(), "node_modules", "pdfjs-dist", "legacy", "build", "pdf.worker.mjs"),
+      path.join(process.cwd(), "node_modules", "pdfjs-dist", "build", "pdf.worker.mjs"),
+    ];
+    const workerPath = workerCandidates.find((candidate) => existsSync(candidate));
+    if (workerPath) {
+      pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
+    }
   }
 
-  const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    useSystemFonts: true,
+    disableFontFace: true,
+    verbosity: 0,
+  });
+
+  const pdf = await Promise.race([
+    loadingTask.promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("PDF parsing timed out after 60 seconds. Try exporting as CSV instead.")), 60000)
+    ),
+  ]);
   const parsedRows: BusyProductRow[] = [];
   const errors: string[] = [];
   const skipped: string[] = [];
@@ -375,5 +388,130 @@ export async function parseBusyPDF(buffer: ArrayBuffer): Promise<BusyParseResult
     errors,
     skipped,
     totalLinesScanned,
+  };
+}
+
+function detectCsvDelimiter(line: string): string {
+  const tabs = (line.match(/\t/g) || []).length;
+  const commas = (line.match(/,/g) || []).length;
+  return tabs > commas ? "\t" : ",";
+}
+
+function matchCsvColumn(header: string): keyof typeof HEADER_HINTS | null {
+  const normalized = header.trim().toLowerCase();
+  for (const [key, patterns] of Object.entries(HEADER_HINTS)) {
+    if (patterns.some((pattern) => pattern.test(normalized))) {
+      return key as keyof typeof HEADER_HINTS;
+    }
+  }
+  if (/name/i.test(normalized)) return "name";
+  if (/barcode|ean|upc/i.test(normalized)) return "barcode";
+  if (/sku|code|hsn/i.test(normalized)) return "sku";
+  if (/mrp/i.test(normalized)) return "mrp";
+  if (/sale|sell|rate|price|sp/i.test(normalized)) return "sellingPrice";
+  if (/stock|qty|quantity|balance/i.test(normalized)) return "stock";
+  return null;
+}
+
+function parseCsvLine(line: string, delimiter: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (char === delimiter && !inQuotes) {
+      cells.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  cells.push(current.trim());
+  return cells;
+}
+
+export function parseBusyCSV(text: string): BusyParseResult {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const errors: string[] = [];
+  const skipped: string[] = [];
+
+  if (lines.length < 2) {
+    return {
+      rows: [],
+      errors: ["CSV file is empty or has no data rows."],
+      skipped,
+      totalLinesScanned: lines.length,
+    };
+  }
+
+  const delimiter = detectCsvDelimiter(lines[0]);
+  const headers = parseCsvLine(lines[0], delimiter);
+  const columnMap: Partial<Record<keyof typeof HEADER_HINTS, number>> = {};
+
+  headers.forEach((header, index) => {
+    const key = matchCsvColumn(header);
+    if (key) columnMap[key] = index;
+  });
+
+  if (columnMap.name === undefined || columnMap.barcode === undefined) {
+    return {
+      rows: [],
+      errors: [
+        "CSV must include columns for product name and barcode (e.g. Item Name, Barcode, MRP, Sale Rate, Stock).",
+      ],
+      skipped,
+      totalLinesScanned: lines.length,
+    };
+  }
+
+  const parsedRows: BusyProductRow[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const cells = parseCsvLine(lines[i], delimiter);
+    if (cells.every((cell) => !cell)) continue;
+
+    const getCell = (key: keyof typeof HEADER_HINTS) => {
+      const index = columnMap[key];
+      return index === undefined ? "" : cells[index] || "";
+    };
+
+    const row: Partial<BusyProductRow> = {
+      name: getCell("name"),
+      barcode: getCell("barcode").replace(/\D/g, ""),
+      sku: getCell("sku"),
+      mrp: parseNumber(getCell("mrp")),
+      sellingPrice: parseNumber(getCell("sellingPrice")),
+      stock: parseNumber(getCell("stock")),
+    };
+
+    const validation = validateBusyProductRow(row);
+    if (validation.valid) {
+      parsedRows.push(validation.row);
+    } else {
+      skipped.push(`Row ${i + 1}: ${validation.reason}`);
+    }
+  }
+
+  const uniqueRows = dedupeRows(parsedRows);
+
+  if (uniqueRows.length === 0) {
+    errors.push("No valid products found in CSV.");
+  }
+
+  return {
+    rows: uniqueRows,
+    errors,
+    skipped,
+    totalLinesScanned: lines.length - 1,
   };
 }

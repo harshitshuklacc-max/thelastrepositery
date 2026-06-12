@@ -81,6 +81,31 @@ export async function getRevenueChart(days = 30) {
   }));
 }
 
+export async function getRecentOrders(limit = 10) {
+  return prisma.order.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    include: {
+      items: { take: 1 },
+      customer: { select: { firstName: true, lastName: true } },
+    },
+  });
+}
+
+export async function getProductsSoldCount(days = 30) {
+  const startDate = subDays(new Date(), days);
+  const result = await prisma.orderItem.aggregate({
+    where: {
+      order: {
+        createdAt: { gte: startDate },
+        paymentStatus: "COMPLETED",
+      },
+    },
+    _sum: { quantity: true },
+  });
+  return result._sum.quantity || 0;
+}
+
 export async function recordDailyAnalytics() {
   const today = startOfDay(new Date());
   const todayEnd = endOfDay(today);

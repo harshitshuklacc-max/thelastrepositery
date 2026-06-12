@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Phone, MapPin, Mail } from "lucide-react";
+import { AdminLoginDialog } from "@/components/home/admin-login-dialog";
 
 export function Footer() {
   return (
@@ -22,6 +23,7 @@ export function Footer() {
               <li><Link href="/shop?filter=new" className="hover:text-white transition-colors">New Arrivals</Link></li>
               <li><Link href="/contact" className="hover:text-white transition-colors">Contact</Link></li>
               <li><Link href="/account" className="hover:text-white transition-colors">My Account</Link></li>
+              <li><AdminLoginDialog asLink /></li>
             </ul>
           </div>
 
@@ -54,7 +56,8 @@ export function Footer() {
 
         <div className="border-t border-white/10 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-white/40">
           <p>&copy; {new Date().getFullYear()} SHOE MAFIA. All rights reserved.</p>
-          <div className="flex gap-4">
+          <div className="flex items-center gap-4">
+            <AdminLoginDialog />
             <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
           </div>

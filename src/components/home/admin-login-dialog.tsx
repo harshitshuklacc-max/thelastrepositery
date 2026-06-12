@@ -14,7 +14,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-export function AdminLoginDialog() {
+export function AdminLoginDialog({
+  prominent = false,
+  asLink = false,
+}: {
+  prominent?: boolean;
+  asLink?: boolean;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -54,10 +60,23 @@ export function AdminLoginDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-white/40 hover:text-white/70 text-xs">
-          <Lock className="h-3 w-3 mr-1" />
-          Admin
-        </Button>
+        {asLink ? (
+          <button
+            type="button"
+            className="hover:text-white transition-colors text-left"
+          >
+            Admin Portal
+          </button>
+        ) : (
+          <Button
+            variant="luxury"
+            size={prominent ? "lg" : "sm"}
+            className={prominent ? "gap-2" : "gap-1"}
+          >
+            <Lock className={prominent ? "h-4 w-4" : "h-3 w-3"} />
+            Admin Portal
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="glass-card border-white/10 sm:max-w-md">
         <DialogHeader>

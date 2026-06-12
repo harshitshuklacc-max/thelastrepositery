@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/utils";
 import { ScanLine, Trash2, Plus, Minus } from "lucide-react";
+import { PosReceiptPrint } from "@/components/admin/pos-receipt-print";
+import type { PosReceiptData } from "@/components/admin/pos-receipt";
 
 interface CartItem {
   productId: string;
@@ -41,7 +43,7 @@ export function PosSystem() {
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [billDiscount, setBillDiscount] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [lastOrder, setLastOrder] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<PosReceiptData | null>(null);
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -148,7 +150,7 @@ export function PosSystem() {
         return;
       }
 
-      setLastOrder(data.orderNumber);
+      setReceipt(data as PosReceiptData);
       setCart([]);
       setCustomerName("");
       setCustomerPhone("");
@@ -162,7 +164,12 @@ export function PosSystem() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="space-y-6">
+      {receipt && (
+        <PosReceiptPrint receipt={receipt} onClose={() => setReceipt(null)} />
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className="lg:col-span-2 space-y-4">
         <Card className="glass-card border-white/10">
           <CardHeader>
@@ -328,16 +335,11 @@ export function PosSystem() {
               onClick={completeSale}
               disabled={cart.length === 0 || loading}
             >
-              {loading ? "Processing..." : "Complete Sale"}
+              {loading ? "Processing..." : "Complete Sale & Print Receipt"}
             </Button>
-
-            {lastOrder && (
-              <div className="text-center text-green-400 text-sm">
-                Sale completed: {lastOrder}
-              </div>
-            )}
           </CardContent>
         </Card>
+      </div>
       </div>
     </div>
   );

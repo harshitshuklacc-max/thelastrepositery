@@ -9,13 +9,17 @@ import {
   Upload,
   FileText,
   Store,
+  Users,
+  PackagePlus,
 } from "lucide-react";
 import { LogoutButton } from "@/components/admin/logout-button";
 
 const adminNav = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/products", label: "Products", icon: Package },
+  { href: "/admin/restock", label: "Scan & Restock", icon: PackagePlus },
   { href: "/admin/orders", label: "Orders", icon: ShoppingCart },
+  { href: "/admin/customers", label: "Customers", icon: Users },
   { href: "/admin/pos", label: "POS", icon: Store },
   { href: "/admin/import", label: "BUSY Import", icon: Upload },
   { href: "/admin/barcodes", label: "Barcodes", icon: ScanLine },

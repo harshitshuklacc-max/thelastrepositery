@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HeroSection } from "@/components/home/hero-section";
+import { AdminPortalSection } from "@/components/home/admin-portal-section";
 import { ProductCard } from "@/components/products/product-card";
 import { getHomepageData } from "@/services/homepage";
 
@@ -188,6 +189,8 @@ export default async function HomePage() {
           </div>
         </section>
       )}
+
+      <AdminPortalSection />
     </>
   );
 }

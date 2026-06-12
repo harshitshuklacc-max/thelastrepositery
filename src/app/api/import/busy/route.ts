@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/auth";
 import { processBusyImport } from "@/services/busy-import";
 
+export const runtime = "nodejs";
+export const maxDuration = 120;
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getAdminSession();
@@ -16,8 +19,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
-      return NextResponse.json({ error: "Only PDF files are supported" }, { status: 400 });
+    if (!file.name.toLowerCase().endsWith(".pdf") && !file.name.toLowerCase().endsWith(".csv")) {
+      return NextResponse.json(
+        { error: "Only PDF and CSV files are supported" },
+        { status: 400 }
+      );
     }
 
     const buffer = await file.arrayBuffer();
